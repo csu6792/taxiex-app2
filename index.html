@@ -288,17 +288,23 @@
             letter-spacing: 1px;
         }
 
-        /* 營業區特化中文字體 */
+        /* 營業區特化中文字體 (點擊可以手動循環切換) */
         .zone-text {
             font-size: clamp(14px, 3.5vh, 24px);
             font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             font-weight: bold;
             text-align: center;
-            border: 2px solid var(--lcd-text);
+            border: 2px dashed var(--lcd-text); /* 虛線框代表可點擊 */
             padding: 1px 4px;
             border-radius: 4px;
             display: inline-block;
             margin: 0 auto;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .zone-text:active {
+            background-color: rgba(0, 0, 0, 0.1);
         }
 
         /* LCD 底部資料列 (時鐘、GPS、車資) */
@@ -363,6 +369,25 @@
             display: flex;
             align-items: flex-end; /* 對齊數字底部 */
             gap: 4px;
+        }
+
+        /* 夜間加成液晶段 */
+        .night-indicator {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            font-size: clamp(11px, 2.5vh, 15px);
+            font-weight: bold;
+            border: 1px solid transparent;
+            padding: 1px 3px;
+            margin-bottom: clamp(4px, 1vh, 14px);
+            opacity: 0.08; /* 未啟動時隱約可見(LCD特性) */
+            transition: all 0.3s;
+        }
+        
+        .night-indicator.active {
+            opacity: 0.95;
+            border: 1px solid var(--lcd-text);
+            border-radius: 3px;
+            background-color: rgba(0,0,0,0.05);
         }
 
         .fare-chinese-label {
@@ -539,10 +564,11 @@
         <!-- 虛擬熱感應收據 -->
         <div class="receipt" id="receiptPaper">
             <div class="receipt-title">台灣計程車乘車證明</div>
+            <div class="receipt-row"><span>營業區:</span><span id="recZone">雙北市</span></div>
             <div class="receipt-row"><span>日期:</span><span id="recDate">2026/07/03</span></div>
             <div class="receipt-row"><span>上車時間:</span><span id="recStartTime">--:--:--</span></div>
             <div class="receipt-row"><span>下車時間:</span><span id="recEndTime">--:--:--</span></div>
-            <div class="receipt-row" style="border-top: 1px dashed #ddd; padding-top: 5px;"><span>起跳車資:</span><span>NT$ 85</span></div>
+            <div class="receipt-row" style="border-top: 1px dashed #ddd; padding-top: 5px;"><span>起跳車資:</span><span id="recBase">NT$ 85</span></div>
             <div class="receipt-row"><span>行駛里程:</span><span id="recDist">0.00 km</span></div>
             <div class="receipt-row"><span>延滯時間:</span><span id="recDelay">00:00</span></div>
             <div class="receipt-row"><span>高速通行費(ETC):</span><span id="recEtc">NT$ 0</span></div>
@@ -586,7 +612,7 @@
                         <div class="lcd-val" id="etcDisplay">0</div>
                         <!-- 營業區 -->
                         <div>
-                            <div class="zone-text" id="zoneDisplay">雙北市</div>
+                            <div class="zone-text" id="zoneDisplay" onclick="cycleRegion(event)" title="點擊切換營業區">雙北市</div>
                         </div>
                         <!-- 計時分秒 -->
                         <div class="lcd-val" id="delayDisplay">0:0</div>
@@ -612,6 +638,7 @@
 
                         <!-- 右側巨型車資 -->
                         <div class="lcd-fare-section">
+                            <span class="night-indicator" id="nightDisplay">夜間</span>
                             <span class="fare-chinese-label">車資</span>
                             <span class="fare-digit" id="fareDisplay">85</span>
                             <span class="fare-unit">元</span>
@@ -672,14 +699,72 @@
     </div>
 
     <script>
-        // --- 費率常數設定 (2023大台北標準) ---
-        const BASE_FARE = 85;             // 起跳價
-        const BASE_DISTANCE = 1250;       // 起跳里程 (公尺)
-        const DISTANCE_INCREMENT = 200;   // 續程單位 (公尺)
-        const DISTANCE_FARE = 5;          // 續程加收金額
-        const DELAY_SPEED_LIMIT = 5;      // 延滯時速門檻 (km/h)
-        const DELAY_TIME_INCREMENT = 60;  // 延滯單位 (秒)
-        const DELAY_FARE = 5;             // 延滯加收金額
+        // --- 營業區官方最新費率資料庫 ---
+        const REGION_CONFIGS = {
+            "雙北市": {
+                name: "雙北市",
+                baseFare: 85,
+                baseDistance: 1250, // 1.25 km
+                distInc: 200,      // 每 200 公尺
+                distFare: 5,       // 加 5 元
+                delayInc: 60,      // 每 60 秒
+                delayFare: 5,      // 加 5 元
+                nightRule: "flat", // 固定夜間加成
+                nightFlat: 20,     // 加收 20 元
+                nightRatio: 1.0
+            },
+            "桃園市": {
+                name: "桃園市",
+                baseFare: 90,
+                baseDistance: 1250,
+                distInc: 200,
+                distFare: 5,
+                delayInc: 80,      // 每 80 秒
+                delayFare: 5,
+                nightRule: "none", // 無夜間加成
+                nightFlat: 0,
+                nightRatio: 1.0
+            },
+            "台中市": {
+                name: "台中市",
+                baseFare: 85,
+                baseDistance: 1250,
+                distInc: 200,
+                distFare: 5,
+                delayInc: 60,      // 每 60 秒
+                delayFare: 5,
+                nightRule: "flat",
+                nightFlat: 20,     // 加收 20 元
+                nightRatio: 1.0
+            },
+            "台南市": {
+                name: "台南市",
+                baseFare: 85,
+                baseDistance: 1250,
+                distInc: 200,
+                distFare: 5,
+                delayInc: 100,     // 每 100 秒
+                delayFare: 5,
+                nightRule: "ratio",// 按比例加成
+                nightFlat: 0,
+                nightRatio: 1.2    // 加收 2 成 (1.2 倍)
+            },
+            "高雄市": {
+                name: "高雄市",
+                baseFare: 85,
+                baseDistance: 1250,
+                distInc: 200,
+                distFare: 5,
+                delayInc: 100,     // 每 100 秒
+                delayFare: 5,
+                nightRule: "ratio",
+                nightFlat: 0,
+                nightRatio: 1.2    // 加收 2 成 (1.2 倍)
+            }
+        };
+
+        const regionsList = ["雙北市", "桃園市", "台中市", "台南市", "高雄市"];
+        let currentRegionKey = "雙北市";
 
         // --- 系統狀態變數 ---
         let isRunning = false;
@@ -690,8 +775,8 @@
         let totalDistance = 0; // 累積公尺
         let delaySeconds = 0;  // 累積延滯秒數
         let etcToll = 0;       // 模擬ETC通行費
-        let currentFare = BASE_FARE;
-        let previousFare = BASE_FARE;
+        let currentFare = 85;
+        let previousFare = 85;
         let currentSpeed = 0;  // km/h
 
         let isHighway = false;     // 高速公路模式
@@ -826,6 +911,7 @@
             zone: document.getElementById('zoneDisplay'),
             sysStatus: document.getElementById('sysStatus'),
             satIcon: document.getElementById('satIcon'),
+            nightDisplay: document.getElementById('nightDisplay'),
             
             // 指示燈
             ledEmpty: document.getElementById('led-empty'),
@@ -840,6 +926,21 @@
             modalMsg: document.getElementById('modalMessage'),
             modalActions: document.getElementById('modalActions')
         };
+
+        // --- 手動切換營業區邏輯 ---
+        function cycleRegion(e) {
+            if (e) e.stopPropagation();
+            playBeep(1200, 0.05);
+            
+            const currentIndex = regionsList.indexOf(currentRegionKey);
+            const nextIndex = (currentIndex + 1) % regionsList.length;
+            currentRegionKey = regionsList[nextIndex];
+            
+            ui.zone.innerText = currentRegionKey;
+            ui.sysStatus.innerText = `營業區手動切換至：${currentRegionKey}`;
+            
+            updateUI();
+        }
 
         // --- 實時時鐘 ---
         function updateClock() {
@@ -911,7 +1012,7 @@
                         3. 確認新增後，在手機桌面點擊圖示即可全螢幕啟用！
                     </div>
                     <div class="guide-step" style="background:#552222; text-align:center;">
-                        💡 <strong>小秘笈：</strong>點擊右上角<strong>左邊的螺絲孔</strong>，或<strong>「雙擊」綠色 LCD 螢幕</strong>，可直接切換全螢幕模式！
+                        💡 <strong>計費祕笈：</strong>點擊螢幕上的<strong>「營業區」</strong>可以手動切換雙北、桃園、台中、台南、高雄最新官方費率喔！
                     </div>
                 </div>
             `;
@@ -943,31 +1044,65 @@
             } else if (lat >= 22.4 && lat <= 23.1 && lon >= 120.1 && lon <= 120.8) {
                 return "高雄市";
             }
-            return "基北區"; // 預設值
+            return null; // 若在其他地方，不覆蓋用戶的手動選擇
         }
 
-        // --- UI 畫面刷新 ---
+        // --- UI 畫面刷新 (費率核心算法) ---
         function updateUI() {
-            let newFare = BASE_FARE;
+            const config = REGION_CONFIGS[currentRegionKey];
             
-            if (totalDistance > BASE_DISTANCE) {
-                const extraDist = totalDistance - BASE_DISTANCE;
-                const distJumps = Math.floor(extraDist / DISTANCE_INCREMENT);
-                newFare += distJumps * DISTANCE_FARE;
+            // 1. 基本車資
+            let newFare = config.baseFare;
+            
+            // 2. 距離計費
+            if (totalDistance > config.baseDistance) {
+                const extraDist = totalDistance - config.baseDistance;
+                const distJumps = Math.floor(extraDist / config.distInc);
+                newFare += distJumps * config.distFare;
             }
 
-            const delayJumps = Math.floor(delaySeconds / DELAY_TIME_INCREMENT);
-            newFare += delayJumps * DELAY_FARE;
+            // 3. 延滯計費
+            const delayJumps = Math.floor(delaySeconds / config.delayInc);
+            newFare += delayJumps * config.delayFare;
 
+            // 4. 夜間加成判定 (23:00 至 06:00)
+            let isNightTime = false;
+            const now = new Date();
+            const hour = now.getHours();
+            if (hour >= 23 || hour < 6) {
+                isNightTime = true;
+            }
+
+            // 更新 LCD 「夜間」指示器狀態
+            if (isNightTime && config.nightRule !== "none") {
+                ui.nightDisplay.classList.add('active');
+            } else {
+                ui.nightDisplay.classList.remove('active');
+            }
+
+            // 5. 套用夜間加成演算法
+            if (isNightTime) {
+                if (config.nightRule === "flat") {
+                    // 雙北、台中：每趟固定加收 20 元
+                    newFare += config.nightFlat;
+                } else if (config.nightRule === "ratio") {
+                    // 台南、高雄：總車資加收 2 成 (乘以 1.2)，並精確四捨五入到 5 元整數倍 (跳表特性)
+                    const ratioFare = newFare * config.nightRatio;
+                    newFare = Math.round(ratioFare / 5) * 5;
+                }
+            }
+
+            // 加上模擬 ETC 通行費
             newFare += etcToll;
-
             currentFare = newFare;
 
+            // 6. 觸發跳表「嗶嗶！」音效
             if (currentFare > previousFare) {
                 playCoinSound();
                 previousFare = currentFare;
             }
 
+            // 7. 渲染資料到 LCD 螢幕
             ui.fare.innerText = currentFare;
             ui.etc.innerText = etcToll;
             
@@ -998,8 +1133,12 @@
             ui.speed.innerText = `${Math.round(calcSpeed)} km/h`;
             ui.sysStatus.innerText = `GPS 連線正常 (精確度: ${Math.round(accuracy)}m)`;
 
+            // 若自動偵測到縣市且沒手動亂點，自動切換
             const detected = detectZone(latitude, longitude);
-            ui.zone.innerText = detected;
+            if (detected && detected !== currentRegionKey) {
+                currentRegionKey = detected;
+                ui.zone.innerText = currentRegionKey;
+            }
 
             if (lastPos) {
                 const distDiff = calculateDistance(lastPos.lat, lastPos.lon, latitude, longitude);
@@ -1122,8 +1261,10 @@
             totalDistance = 0;
             delaySeconds = 0;
             etcToll = 0;
-            currentFare = BASE_FARE;
-            previousFare = BASE_FARE;
+            
+            const config = REGION_CONFIGS[currentRegionKey];
+            currentFare = config.baseFare;
+            previousFare = config.baseFare;
             currentSpeed = 0;
             lastPos = null;
 
@@ -1164,10 +1305,14 @@
             }
 
             const now = new Date();
+            document.getElementById('recZone').innerText = currentRegionKey;
             document.getElementById('recDate').innerText = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}`;
             document.getElementById('recStartTime').innerText = startTimeStr;
             document.getElementById('recEndTime').innerText = endTimeStr;
             document.getElementById('recDist').innerText = `${(totalDistance / 1000).toFixed(2)} km`;
+            
+            const config = REGION_CONFIGS[currentRegionKey];
+            document.getElementById('recBase').innerText = `NT$ ${config.baseFare}`;
             
             const mins = Math.floor(delaySeconds / 60);
             const secs = delaySeconds % 60;
@@ -1215,7 +1360,7 @@
                 navigator.serviceWorker.register('./sw.js').then(reg => {
                     console.log('PWA ServiceWorker 註冊成功:', reg.scope);
                 }).catch(err => {
-                    console.log('PWA ServiceWorker 註冊旁路 (未提供獨立 sw.js 檔亦可正常使用主畫面安裝)：', err);
+                    console.log('PWA ServiceWorker 註冊旁路：', err);
                 });
             });
         }
