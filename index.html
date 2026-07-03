@@ -750,6 +750,53 @@
             } catch(e) { console.error(e); }
         }
 
+        // 撕收據聲 (模擬紙張撕裂的摩擦聲與沙沙聲)
+        function playTearSound() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const bufferSize = audioCtx.sampleRate * 0.35; // 0.35 秒
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                // 使用帶有振幅調變的隨機白噪音，模擬撕扯時的粗糙阻力
+                for (let i = 0; i < bufferSize; i++) {
+                    const progress = i / bufferSize;
+                    const crackle = Math.sin(i * 0.08) * 0.4 + 0.6; // 紙張纖維斷裂的碎裂感
+                    data[i] = (Math.random() * 2 - 1) * crackle * (1 - progress);
+                }
+
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+
+                // 帶通濾波器：保留高頻摩擦聲，過濾掉沉悶的低頻
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(3200, audioCtx.currentTime);
+                filter.Q.setValueAtTime(1.8, audioCtx.currentTime);
+                // 撕扯速度變化引起的頻率微調
+                filter.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.45, audioCtx.currentTime + 0.02); // 快速起音
+                
+                // 動態模擬多次撕扯起伏 (嘶...嘶啦...的層次感)
+                gainNode.gain.setValueAtTime(0.45, audioCtx.currentTime + 0.05);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime + 0.12);
+                gainNode.gain.setValueAtTime(0.35, audioCtx.currentTime + 0.18);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+                noise.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                noise.start();
+                noise.stop(audioCtx.currentTime + 0.35);
+            } catch(e) { console.error("撕紙音效錯誤:", e); }
+        }
+
         // --- DOM 元素 ---
         const ui = {
             fare: document.getElementById('fareDisplay'),
@@ -1115,6 +1162,8 @@
         }
 
         function closeReceipt() {
+            // 播放撕紙音效
+            playTearSound();
             ui.receipt.classList.remove('print-out');
         }
 
