@@ -1144,7 +1144,10 @@
                 const distDiff = calculateDistance(lastPos.lat, lastPos.lon, latitude, longitude);
                 const timeDiff = (timestamp - lastPos.time) / 1000;
 
-                if (distDiff > 2 && distDiff < 300) {
+                // 如果移动距離小於等於 2 公尺，視為原地停等紅燈 (避免 GPS 原地抖動導致判定有速度)
+                if (distDiff <= 2) {
+                    calcSpeed = 0;
+                } else if (distDiff < 300) {
                     totalDistance += distDiff;
                     
                     if (isHighway) {
@@ -1183,6 +1186,14 @@
         function checkDelay() {
             if (!isRunning) return;
             if (isHighway) return;
+
+            // 雙重安全心跳機制：若超過 3.5 秒 GPS 完全沒有任何位置資訊推送，代表車子已完全靜止
+            const now = Date.now();
+            if (lastPos && (now - lastPos.time > 3500)) {
+                currentSpeed = 0;
+                ui.speed.innerText = "0 km/h";
+            }
+
             if (currentSpeed < DELAY_SPEED_LIMIT) {
                 delaySeconds++;
                 updateUI();
@@ -1311,9 +1322,6 @@
             document.getElementById('recEndTime').innerText = endTimeStr;
             document.getElementById('recDist').innerText = `${(totalDistance / 1000).toFixed(2)} km`;
             
-            const config = REGION_CONFIGS[currentRegionKey];
-            document.getElementById('recBase').innerText = `NT$ ${config.baseFare}`;
-            
             const mins = Math.floor(delaySeconds / 60);
             const secs = delaySeconds % 60;
             document.getElementById('recDelay').innerText = `${mins}分${secs}秒`;
@@ -1324,8 +1332,8 @@
             ui.ledEmpty.classList.remove('active');
         }
 
+        // 撕下收據
         function closeReceipt() {
-            // 播放撕紙音效
             playTearSound();
             ui.receipt.classList.remove('print-out');
         }
@@ -1354,7 +1362,7 @@
         ui.ledEmpty.classList.add('active');
         updateUI();
 
-        // 註冊空 Service Worker (提供 GitHub Pages PWA 連線綠燈)
+        // 註冊空 Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').then(reg => {
