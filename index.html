@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>台灣計程車 GPS 跳表 (橫向面板)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --bg-color: #050505;
+            --panel-bg: #111;
+            --led-red: #ff2a2a;
+            --led-red-dim: #4a0000;
+            --led-green: #39ff14;
+            --led-yellow: #ffd700;
+            --border-color: #333;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 橫向排版容器 */
+        .dashboard {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            padding: 15px;
+            gap: 15px;
+        }
+
+        /* 左側：主計費區 */
+        .main-panel {
+            flex: 6;
+            background-color: var(--panel-bg);
+            border: 4px solid var(--border-color);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* 右側：數據與控制區 */
+        .side-panel {
+            flex: 4;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .stats-panel {
+            flex: 1;
+            background-color: var(--panel-bg);
+            border: 4px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 10px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .controls-panel {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            height: 140px;
+        }
+
+        /* LED 顯示文字共用設定 */
+        .led-text {
+            font-family: 'Share Tech Mono', monospace;
+            text-align: right;
+            margin: 0;
+            line-height: 1;
+        }
+
+        /* 車資顯示特化 */
+        .fare-label {
+            color: #888;
+            font-size: 1.5vw;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .fare-display-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            background-color: #000;
+            border: inset 5px #222;
+            border-radius: 8px;
+            padding: 0 20px;
+            margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fare-amount {
+            font-size: 18vh;
+            color: var(--led-red);
+            text-shadow: 0 0 15px var(--led-red), 0 0 30px var(--led-red);
+        }
+
+        /* 狀態列 */
+        .status-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 20px;
+            color: var(--led-yellow);
+            font-size: 1vw;
+            font-family: 'Share Tech Mono', monospace;
+            text-shadow: 0 0 5px var(--led-yellow);
+        }
+
+        /* 副螢幕數據顯示 */
+        .stat-box {
+            background-color: #000;
+            border: inset 3px #222;
+            border-radius: 6px;
+            padding: 5px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 1.2vw;
+            font-weight: bold;
+        }
+
+        .stat-value {
+            font-size: 5vh;
+            color: var(--led-green);
+            text-shadow: 0 0 10px var(--led-green);
+        }
+
+        /* 按鈕設計 */
+        button {
+            border: none;
+            border-radius: 8px;
+            font-size: 1.5vw;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.1s;
+            text-transform: uppercase;
+            box-shadow: 0 5px 0 #111, 0 5px 10px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        button:active {
+            transform: translateY(5px);
+            box-shadow: 0 0 0 #111, 0 0 0 rgba(0,0,0,0.5);
+        }
+
+        .btn-start, .btn-stop {
+            grid-column: 1 / 2;
+            grid-row: 1 / 3;
+            font-size: 2vw;
+        }
+
+        .btn-start {
+            background-color: #2e7d32;
+            color: white;
+            border: 2px solid #4caf50;
+        }
+
+        .btn-stop {
+            background-color: #c62828;
+            color: white;
+            border: 2px solid #ef5350;
+            display: none;
+        }
+
+        .btn-toggle {
+            background-color: #333;
+            color: #aaa;
+            border: 2px solid #555;
+            font-size: 1.2vw;
+            line-height: 1.2;
+            flex-direction: column;
+        }
+
+        .btn-toggle.active {
+            background-color: var(--led-yellow);
+            color: black;
+            border: 2px solid #fff;
+            box-shadow: inset 0 0 10px rgba(255,255,0,0.5);
+        }
+
+        .btn-timing {
+            grid-column: 2 / 3;
+            grid-row: 1 / 2;
+        }
+
+        .btn-hwy {
+            grid-column: 3 / 4;
+            grid-row: 1 / 2;
+        }
+
+        .btn-reset {
+            background-color: #455a64;
+            color: white;
+            border: 2px solid #78909c;
+            grid-column: 2 / 4;
+            grid-row: 2 / 3;
+        }
+
+        /* 訊息彈窗 (取代 Alert) */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background: #222;
+            border: 2px solid var(--led-yellow);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+            max-width: 400px;
+        }
+        .modal-content h3 { margin-top: 0; color: var(--led-yellow); }
+        .modal-btn {
+            background: var(--led-yellow);
+            color: black;
+            padding: 10px 20px;
+            margin-top: 20px;
+            font-size: 1rem;
+            box-shadow: none;
+        }
+
+        /* 鎖定直向模式提示 */
+        #portrait-warning {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000;
+            color: white;
+            z-index: 999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #portrait-warning svg {
+            width: 100px;
+            height: 100px;
+            fill: white;
+            animation: rotatePhone 2s infinite ease-in-out;
+            margin-bottom: 20px;
+        }
+
+        @keyframes rotatePhone {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(-90deg); }
+        }
+
+        @media screen and (orientation: portrait) {
+            #portrait-warning {
+                display: flex;
+            }
+            .dashboard {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 垂直螢幕警告 -->
+    <div id="portrait-warning">
+        <svg viewBox="0 0 24 24">
+            <path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm1 19c0 .55-.45 1-1 1H8c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1h8c.55 0 1 .45 1 1v16z"/>
+        </svg>
+        <h2>請將手機旋轉至橫向</h2>
+        <p>此跳表應用程式專為橫向儀表板設計</p>
+    </div>
+
+    <!-- 主介面 -->
+    <div class="dashboard">
+        
+        <!-- 左側主螢幕 -->
+        <div class="main-panel">
+            <div class="fare-label">TOTAL FARE (NT$) 總車資</div>
+            <div class="fare-display-container">
+                <div class="led-text fare-amount" id="fareDisplay">85</div>
+            </div>
+            <div class="status-bar" id="statusText">SYSTEM READY. WAITING FOR GPS.</div>
+        </div>
+
+        <!-- 右側副螢幕與按鈕 -->
+        <div class="side-panel">
+            <div class="stats-panel">
+                <div class="stat-box">
+                    <div class="stat-label">DISTANCE<br>行駛 (km)</div>
+                    <div class="led-text stat-value" id="distanceDisplay">0.00</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">SPEED<br>時速 (km/h)</div>
+                    <div class="led-text stat-value" id="speedDisplay">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">DELAY<br>延滯 (mm:ss)</div>
+                    <div class="led-text stat-value" id="delayDisplay">00:00</div>
+                </div>
+            </div>
+            
+            <div class="controls-panel">
+                <button class="btn-start" id="startBtn" onclick="startMeter()">START / 開始計費</button>
+                <button class="btn-stop" id="stopBtn" onclick="stopMeter()">STOP / 停止</button>
+                <button class="btn-toggle btn-timing" id="timingBtn" onclick="toggleTiming()">WAIT<br>計時</button>
+                <button class="btn-toggle btn-hwy" id="hwyBtn" onclick="toggleHwy()">HWY<br>高速</button>
+                <button class="btn-reset" onclick="showModal('reset')">RESET / 歸零</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自訂提示視窗 -->
+    <div class="modal-overlay" id="customModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">提示</h3>
+            <p id="modalMessage">訊息內容</p>
+            <div id="modalActions">
+                <button class="modal-btn" onclick="closeModal()">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 費率常數設定 (2023大台北標準) ---
+        const BASE_FARE = 85;             // 起跳價
+        const BASE_DISTANCE = 1250;       // 起跳里程 (公尺)
+        const DISTANCE_INCREMENT = 200;   // 續程單位 (公尺)
+        const DISTANCE_FARE = 5;          // 續程加收金額
+        const DELAY_SPEED_LIMIT = 5;      // 延滯時速門檻 (km/h)
+        const DELAY_TIME_INCREMENT = 60;  // 延滯單位 (秒)
+        const DELAY_FARE = 5;             // 延滯加收金額
+
+        // --- 系統狀態變數 ---
+        let isRunning = false;
+        let watchId = null;
+        let delayTimer = null;
+        
+        let lastPos = null;
+        let totalDistance = 0; // 累積公尺
+        let delaySeconds = 0;  // 累積延滯秒數
+        let currentFare = BASE_FARE;
+        let previousFare = BASE_FARE; // 新增：追蹤前一次車資以觸發音效
+        let currentSpeed = 0;  // km/h
+
+        let isForceTiming = false; // 強制計時模式
+        let isHighway = false;     // 高速公路模式
+
+        // --- 音效系統 (Web Audio API) ---
+        let audioCtx = null;
+
+        function playCoinSound() {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            // 設定音色 (類似超級瑪利歐吃金幣的高頻聲)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(2400, audioCtx.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // --- DOM 元素 ---
+        const ui = {
+            fare: document.getElementById('fareDisplay'),
+            dist: document.getElementById('distanceDisplay'),
+            speed: document.getElementById('speedDisplay'),
+            delay: document.getElementById('delayDisplay'),
+            status: document.getElementById('statusText'),
+            startBtn: document.getElementById('startBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            timingBtn: document.getElementById('timingBtn'), // 新增
+            hwyBtn: document.getElementById('hwyBtn'),       // 新增
+            modal: document.getElementById('customModal'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalMsg: document.getElementById('modalMessage'),
+            modalActions: document.getElementById('modalActions')
+        };
+
+        // --- 核心邏輯：計算兩點距離 (Haversine Formula) ---
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // 地球半徑 (m)
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // --- UI 更新邏輯 ---
+        function updateUI() {
+            // 1. 計算車資
+            let newFare = BASE_FARE;
+            
+            // 距離加成
+            if (totalDistance > BASE_DISTANCE) {
+                const extraDist = totalDistance - BASE_DISTANCE;
+                const distJumps = Math.floor(extraDist / DISTANCE_INCREMENT);
+                newFare += distJumps * DISTANCE_FARE;
+            }
+
+            // 延滯加成
+            const delayJumps = Math.floor(delaySeconds / DELAY_TIME_INCREMENT);
+            newFare += delayJumps * DELAY_FARE;
+
+            currentFare = newFare;
+
+            // 觸發跳錢音效
+            if (currentFare > previousFare) {
+                playCoinSound();
+                previousFare = currentFare;
+            }
+
+            // 2. 更新畫面數字
+            ui.fare.innerText = currentFare;
+            ui.dist.innerText = (totalDistance / 1000).toFixed(2);
+            ui.speed.innerText = currentSpeed.toFixed(0);
+            
+            // 格式化時間 mm:ss
+            const mins = Math.floor(delaySeconds / 60).toString().padStart(2, '0');
+            const secs = (delaySeconds % 60).toString().padStart(2, '0');
+            ui.delay.innerText = `${mins}:${secs}`;
+        }
+
+        // --- GPS 處理邏輯 ---
+        function handlePosition(position) {
+            if (!isRunning) return;
+
+            const { latitude, longitude, accuracy, speed } = position.coords;
+            const timestamp = position.timestamp;
+
+            // 若硬體有提供速度則使用，否則預設為0 (稍後透過距離計算補償)
+            let calcSpeed = speed !== null ? (speed * 3.6) : 0; 
+
+            // 過濾極差的 GPS 訊號 (誤差大於 50 公尺)
+            if (accuracy > 50) {
+                ui.status.innerText = `WARNING: LOW GPS ACCURACY (${Math.round(accuracy)}m). PAUSED.`;
+                ui.status.style.color = 'var(--led-red)';
+                currentSpeed = 0;
+                updateUI();
+                return;
+            }
+
+            ui.status.innerText = "GPS TRACKING ACTIVE [ OK ]";
+            ui.status.style.color = 'var(--led-yellow)';
+
+            if (lastPos) {
+                const distDiff = calculateDistance(lastPos.lat, lastPos.lon, latitude, longitude);
+                const timeDiff = (timestamp - lastPos.time) / 1000; // 秒
+
+                // 過濾異常飄移 (2秒內瞬間移動超過特定距離，或距離微小似原地飄移)
+                // 這裡設定：位移大於 2 公尺且時速合理才採計
+                if (distDiff > 2 && distDiff < 300) {
+                    totalDistance += distDiff;
+                    
+                    // 如果硬體沒給速度，用距離/時間推算
+                    if (speed === null && timeDiff > 0) {
+                        calcSpeed = (distDiff / timeDiff) * 3.6;
+                    }
+                }
+            }
+
+            currentSpeed = calcSpeed;
+            lastPos = { lat: latitude, lon: longitude, time: timestamp };
+            
+            updateUI();
+        }
+
+        function handleGPSError(error) {
+            let msg = "未知的 GPS 錯誤";
+            switch(error.code) {
+                case error.PERMISSION_DENIED: msg = "用戶拒絕提供位置資訊，無法計費。"; break;
+                case error.POSITION_UNAVAILABLE: msg = "無法獲取當前位置訊號。"; break;
+                case error.TIMEOUT: msg = "獲取位置超時。"; break;
+            }
+            ui.status.innerText = "ERROR: " + msg;
+            ui.status.style.color = 'var(--led-red)';
+            stopMeter();
+            showModal('error', msg);
+        }
+
+        // --- 模式切換邏輯 (計時/高速) ---
+        function toggleTiming() {
+            if (!isRunning) return; // 僅在計費中可用
+            isForceTiming = !isForceTiming;
+            ui.timingBtn.classList.toggle('active', isForceTiming);
+            
+            // 互斥邏輯：開啟強制計時就關閉高速公路
+            if (isForceTiming && isHighway) {
+                isHighway = false;
+                ui.hwyBtn.classList.remove('active');
+            }
+        }
+
+        function toggleHwy() {
+            if (!isRunning) return; // 僅在計費中可用
+            isHighway = !isHighway;
+            ui.hwyBtn.classList.toggle('active', isHighway);
+            
+            // 互斥邏輯：開啟高速公路就關閉強制計時
+            if (isHighway && isForceTiming) {
+                isForceTiming = false;
+                ui.timingBtn.classList.remove('active');
+            }
+        }
+
+        // --- 延滯計時邏輯 (每秒觸發) ---
+        function checkDelay() {
+            if (!isRunning) return;
+            
+            if (isHighway) return; // 高速公路模式下不計延滯時間
+
+            // 如果強制計時，或時速低於門檻，增加延滯秒數
+            if (isForceTiming || currentSpeed < DELAY_SPEED_LIMIT) {
+                delaySeconds++;
+                updateUI();
+            }
+        }
+
+        // --- 控制按鈕邏輯 ---
+        function startMeter() {
+            if (!navigator.geolocation) {
+                showModal('error', "您的瀏覽器不支援 Geolocation API。");
+                return;
+            }
+
+            // 初始化音效 (必須在使用者點擊事件中初始化才能解鎖瀏覽器限制)
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } else if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            isRunning = true;
+            ui.startBtn.style.display = 'none';
+            ui.stopBtn.style.display = 'block';
+            ui.status.innerText = "ACQUIRING GPS SIGNAL...";
+            ui.status.style.color = 'var(--led-yellow)';
+
+            // 啟動 GPS 監聽
+            watchId = navigator.geolocation.watchPosition(
+                handlePosition,
+                handleGPSError,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
+                }
+            );
+
+            // 啟動延滯計時器
+            delayTimer = setInterval(checkDelay, 1000);
+        }
+
+        function stopMeter() {
+            isRunning = false;
+            ui.startBtn.style.display = 'block';
+            ui.stopBtn.style.display = 'none';
+            ui.status.innerText = "SYSTEM PAUSED. METER STOPPED.";
+
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            if (delayTimer !== null) {
+                clearInterval(delayTimer);
+                delayTimer = null;
+            }
+            
+            currentSpeed = 0;
+            updateUI();
+        }
+
+        function performReset() {
+            if (isRunning) stopMeter();
+            totalDistance = 0;
+            delaySeconds = 0;
+            currentFare = BASE_FARE;
+            previousFare = BASE_FARE;
+            currentSpeed = 0;
+            lastPos = null;
+
+            // 重置按鈕狀態
+            isForceTiming = false;
+            isHighway = false;
+            ui.timingBtn.classList.remove('active');
+            ui.hwyBtn.classList.remove('active');
+
+            updateUI();
+            ui.status.innerText = "SYSTEM RESET. READY.";
+            closeModal();
+        }
+
+        // --- 提示視窗邏輯 ---
+        function showModal(type, msg = "") {
+            ui.modal.style.display = 'flex';
+            if (type === 'reset') {
+                ui.modalTitle.innerText = "重新計算";
+                ui.modalMsg.innerText = "確定要將車資與里程歸零嗎？";
+                ui.modalActions.innerHTML = `
+                    <button class="modal-btn" style="background:#555; color:white; margin-right:10px;" onclick="closeModal()">取消</button>
+                    <button class="modal-btn" style="background:var(--led-red); color:white;" onclick="performReset()">確定歸零</button>
+                `;
+            } else if (type === 'error') {
+                ui.modalTitle.innerText = "系統錯誤";
+                ui.modalMsg.innerText = msg;
+                ui.modalActions.innerHTML = `<button class="modal-btn" onclick="closeModal()">確定</button>`;
+            }
+        }
+
+        function closeModal() {
+            ui.modal.style.display = 'none';
+        }
+
+        // 初始化畫面
+        updateUI();
+
+    </script>
+</body>
+</html>
