@@ -725,29 +725,47 @@
             } catch(e) { console.error(e); }
         }
 
-        // 跳金幣聲 (跳表加錢時)
+        // 擬真跳表逼逼聲 (跳表加錢時，模擬實體 HC-1 經典急促的雙頻電子「嗶嗶！」聲)
         function playCoinSound() {
             try {
                 if (!audioCtx) return;
                 if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const now = audioCtx.currentTime;
+                const beepFreq = 2000; // 經典電子蜂鳴器頻率
+                const beepDuration = 0.07; // 極短急促
+
+                // 第一聲嗶！
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(beepFreq, now);
                 
-                const osc = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
+                gain1.gain.setValueAtTime(0, now);
+                gain1.gain.linearRampToValueAtTime(0.2, now + 0.01);
+                gain1.gain.exponentialRampToValueAtTime(0.001, now + beepDuration);
                 
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(2400, audioCtx.currentTime + 0.1);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + beepDuration);
+
+                // 第二聲嗶！ (間隔 0.1 秒後響起)
+                const delay = 0.1;
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(beepFreq, now + delay);
                 
-                gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.02);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                gain2.gain.setValueAtTime(0, now + delay);
+                gain2.gain.linearRampToValueAtTime(0.2, now + delay + 0.01);
+                gain2.gain.exponentialRampToValueAtTime(0.001, now + delay + beepDuration);
                 
-                osc.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.3);
-            } catch(e) { console.error(e); }
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start(now + delay);
+                osc2.stop(now + delay + beepDuration);
+            } catch(e) { console.error("跳表音效錯誤:", e); }
         }
 
         // 撕收據聲 (模擬紙張撕裂的摩擦聲與沙沙聲)
