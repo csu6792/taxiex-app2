@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台灣計程車 GPS 跳表</title>
+    
+    <!-- PWA iOS 專屬全螢幕設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HC-1跳表機">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100%' height='100%' fill='%23f5b016' rx='20'/><text y='70' x='10' font-family='sans-serif' font-size='60' font-weight='bold' fill='%23111'>HC1</text></svg>">
+
+    <!-- 內嵌 PWA Manifest (Data URI 技術，免去額外上傳 json 檔) -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"台灣計程車跳表 HC-1","short_name":"HC-1跳表","description":"台灣計程車 GPS 擬真跳表計費器","start_url":".","display":"standalone","orientation":"landscape","background_color":"%23121212","theme_color":"%23f5b016","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23f5b016%22 rx=%2220%22/><text y=%2270%22 x=%2210%22 font-family=%22sans-serif%22 font-size=%2260%22 font-weight=%22bold%22 fill=%22%23111%22>HC1</text></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
+
+    <title>台灣計程車 GPS 跳表 (招財牌 HC-1 PWA版)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -161,13 +171,76 @@
 
         .brand-logo {
             position: absolute;
-            right: clamp(20px, 4vw, 35px);
-            top: clamp(15px, 3vh, 30px);
-            color: rgba(200, 200, 200, 0.4); /* 調淡避免擋住標記 */
+            right: clamp(120px, 14vw, 160px);
+            top: clamp(18px, 3.2vh, 32px);
+            color: rgba(255, 255, 255, 0.7);
             font-family: 'Share Tech Mono', sans-serif;
-            font-size: clamp(12px, 2.5vh, 16px);
+            font-size: clamp(13px, 2.8vh, 18px);
             font-weight: bold;
             text-shadow: 1px 1px 2px #000;
+        }
+
+        /* 右上角擬真硬體調整孔 (實作全螢幕與指南) */
+        .utility-screws {
+            position: absolute;
+            right: clamp(20px, 4vw, 35px);
+            top: clamp(15px, 3vh, 28px);
+            display: flex;
+            gap: clamp(10px, 1.5vw, 18px);
+        }
+
+        .screw-btn {
+            width: clamp(24px, 5vh, 32px);
+            height: clamp(24px, 5vh, 32px);
+            border-radius: 50%;
+            background: radial-gradient(circle, #555 30%, #222 90%);
+            border: 2px solid #111;
+            box-shadow: inset 0 2px 3px rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.4);
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 螺絲十字溝槽 */
+        .screw-btn::before {
+            content: '';
+            position: absolute;
+            width: 70%;
+            height: 3px;
+            background-color: #111;
+            transform: rotate(45deg);
+        }
+
+        .screw-btn::after {
+            content: '';
+            position: absolute;
+            width: 70%;
+            height: 3px;
+            background-color: #111;
+            transform: rotate(-45deg);
+        }
+
+        .screw-btn:active {
+            transform: scale(0.95);
+            background: #222;
+        }
+
+        /* 提示小標籤 */
+        .screw-btn .tooltip {
+            position: absolute;
+            bottom: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0.7;
         }
 
         /* LCD 亮綠色液晶螢幕 */
@@ -185,6 +258,7 @@
             justify-content: space-between;
             position: relative;
             overflow: hidden;
+            cursor: pointer; /* 點擊/雙擊此處可切換全螢幕 */
         }
 
         /* 螢幕玻璃反光特效 */
@@ -239,7 +313,7 @@
             width: 100%;
         }
 
-        /* 左側資訊群組 (時鐘與GPS垂直堆疊，留出大空間給右側車資) */
+        /* 左側資訊群組 */
         .lcd-left-bottom {
             display: flex;
             flex-direction: column;
@@ -300,10 +374,10 @@
 
         .fare-digit {
             font-family: 'Share Tech Mono', monospace;
-            font-size: clamp(85px, 24vh, 155px); /* 終極巨大化車資金額！ */
+            font-size: clamp(85px, 24vh, 155px); /* 終極巨大化車資金額 */
             font-weight: 900;
-            line-height: 0.85; /* 緊湊行高防止 iOS Safari 裁切字體頂部，並留白 */
-            letter-spacing: -2px; /* 緊密字距，呈現復古液晶字面板質感 */
+            line-height: 0.85;
+            letter-spacing: -2px;
         }
 
         .fare-unit {
@@ -349,7 +423,7 @@
         /* 按鈕本體 */
         .phys-btn {
             width: 100%;
-            height: clamp(32px, 8.5vh, 52px); /* 限制最大和最小高度，防止壓扁或爆出 */
+            height: clamp(32px, 8.5vh, 52px); /* 限制最大和最小高度 */
             background: linear-gradient(to bottom, #444, #222);
             border: clamp(2px, 0.5vh, 3px) solid #111;
             border-radius: 8px;
@@ -427,6 +501,22 @@
             #portrait-warning { display: flex; }
             .dashboard { display: none; }
         }
+
+        /* 提示指南 PWA 視窗樣式 */
+        .guide-box {
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .guide-step {
+            margin-bottom: 12px;
+            background: #333;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        .guide-step strong {
+            color: var(--casing-yellow);
+        }
     </style>
 </head>
 <body>
@@ -464,7 +554,17 @@
         <!-- 擬真跳表機主體 -->
         <div class="meter-body">
             
-            <div class="brand-logo">HC-1</div>
+            <div class="brand-logo">HC-1 PWA</div>
+
+            <!-- 右上角硬體校準按鈕 (兼全螢幕與安裝導覽) -->
+            <div class="utility-screws">
+                <div class="screw-btn" onclick="toggleFullscreen(event)">
+                    <span class="tooltip">全螢幕</span>
+                </div>
+                <div class="screw-btn" onclick="showPwaGuide(event)">
+                    <span class="tooltip">說明</span>
+                </div>
+            </div>
 
             <!-- 鏡面外框 -->
             <div class="screen-bezel">
@@ -477,8 +577,8 @@
                     <div>距離 公里</div>
                 </div>
 
-                <!-- 亮綠色 LCD 螢幕 -->
-                <div class="lcd-screen">
+                <!-- 亮綠色 LCD 螢幕 (支援雙擊切換全螢幕) -->
+                <div class="lcd-screen" id="lcdScreen" ondblclick="toggleFullscreen(event)">
                     
                     <!-- LCD 第一排數據 -->
                     <div class="lcd-top-row">
@@ -556,7 +656,7 @@
 
             </div>
 
-            <div class="system-status" id="sysStatus">HC-1 GPS TACHOMETER READY</div>
+            <div class="system-status" id="sysStatus">HC-1 PWA READY. DOUBLE CLICK SCREEN TO FULLSCREEN.</div>
         </div>
     </div>
 
@@ -564,7 +664,7 @@
     <div class="modal-overlay" id="customModal">
         <div class="modal-content">
             <h3 id="modalTitle">提示</h3>
-            <p id="modalMessage">訊息內容</p>
+            <div id="modalMessage">訊息內容</div>
             <div id="modalActions">
                 <button class="modal-btn" onclick="closeModal()">確定</button>
             </div>
@@ -686,6 +786,72 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
+
+        // --- 全螢幕控制 (Fullscreen API) ---
+        function toggleFullscreen(e) {
+            if (e) e.stopPropagation();
+            playBeep(1800, 0.05);
+            
+            if (!document.fullscreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.msFullscreenElement) {
+                // 進入全螢幕
+                const docElm = document.documentElement;
+                if (docElm.requestFullscreen) {
+                    docElm.requestFullscreen();
+                } else if (docElm.webkitRequestFullscreen) {
+                    docElm.webkitRequestFullscreen(); // Safari / iOS iPad
+                } else if (docElm.mozRequestFullScreen) {
+                    docElm.mozRequestFullScreen();
+                } else if (docElm.msRequestFullscreen) {
+                    docElm.msRequestFullscreen();
+                }
+                ui.sysStatus.innerText = "已啟用全螢幕模式";
+            } else {
+                // 退出全螢幕
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                ui.sysStatus.innerText = "已結束全螢幕模式";
+            }
+        }
+
+        // --- 彈出 PWA 安裝指南 ---
+        function showPwaGuide(e) {
+            if (e) e.stopPropagation();
+            playBeep();
+            
+            ui.modal.style.display = 'flex';
+            ui.modalTitle.innerText = "📱 獨立全螢幕 App 安裝指南";
+            
+            ui.modalMsg.innerHTML = `
+                <div class="guide-box">
+                    <div class="guide-step">
+                        <strong>🍎 iPhone / iPad (Safari) 推薦：</strong><br>
+                        1. 點選 Safari 瀏覽器底部的<strong>「分享」按鈕</strong>（箭頭向上圖示）。<br>
+                        2. 往下滑選單，選擇<strong>「加入主畫面」</strong>。<br>
+                        3. 點選右上角「新增」。從主畫面上打開，即可擁有 100% 滿版無網址列的 PWA 體驗！
+                    </div>
+                    <div class="guide-step">
+                        <strong>🤖 Android 手機 (Chrome)：</strong><br>
+                        1. 點選 Chrome 網址列右上角的<strong>「三個點」設定選單</strong>。<br>
+                        2. 點選<strong>「安裝應用程式」</strong>或<strong>「加入主畫面」</strong>。<br>
+                        3. 確認新增後，在手機桌面點擊圖示即可全螢幕啟用！
+                    </div>
+                    <div class="guide-step" style="background:#552222; text-align:center;">
+                        💡 <strong>小秘笈：</strong>點擊右上角<strong>左邊的螺絲孔</strong>，或<strong>「雙擊」綠色 LCD 螢幕</strong>，可直接切換全螢幕模式！
+                    </div>
+                </div>
+            `;
+            ui.modalActions.innerHTML = `<button class="modal-btn" onclick="closeModal()">了解！開始使用</button>`;
+        }
 
         // --- 核心邏輯：計算兩點距離 (Haversine Formula) ---
         function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -964,7 +1130,7 @@
                 `;
             } else if (type === 'error') {
                 ui.modalTitle.innerText = "系統提示";
-                ui.modalMsg.innerText = msg;
+                ui.modalMsg.innerHTML = `<div style="text-align:center; padding: 10px 0;">${msg}</div>`;
                 ui.modalActions.innerHTML = `<button class="modal-btn" onclick="closeModal()">確定</button>`;
             }
         }
@@ -975,6 +1141,17 @@
 
         ui.ledEmpty.classList.add('active');
         updateUI();
+
+        // 註冊空 Service Worker (提供 GitHub Pages PWA 連線綠燈)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('PWA ServiceWorker 註冊成功:', reg.scope);
+                }).catch(err => {
+                    console.log('PWA ServiceWorker 註冊旁路 (未提供獨立 sw.js 檔亦可正常使用主畫面安裝)：', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>
