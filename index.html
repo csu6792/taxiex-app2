@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>台灣計程車 GPS 跳表 (招財牌 HC-1 擬真版)</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
         :root {
             /* 實體機外觀配色 */
@@ -202,7 +202,7 @@
             display: grid;
             grid-template-columns: 1.8fr 1.8fr 2fr 1.4fr;
             align-items: center;
-            font-family: 'Share Tech Mono', 'VT323', monospace;
+            font-family: 'Share Tech Mono', monospace;
             color: var(--lcd-text);
             text-shadow: 0 1px 0px rgba(255,255,255,0.4);
         }
@@ -232,7 +232,7 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            font-family: 'Share Tech Mono', 'VT323', monospace;
+            font-family: 'Share Tech Mono', monospace;
             color: var(--lcd-text);
             text-shadow: 0 1px 0px rgba(255,255,255,0.4);
             margin-top: 5px;
@@ -242,8 +242,8 @@
         .lcd-clock-container {
             border: 2px solid var(--lcd-text);
             border-radius: 6px;
-            padding: 2px clamp(4px, 1vw, 10px);
-            font-size: clamp(14px, 3.5vh, 24px);
+            padding: 2px clamp(4px, 1vw, 8px);
+            font-size: clamp(12px, 3vh, 18px);
             font-weight: bold;
             background: rgba(0,0,0,0.03);
             letter-spacing: 1px;
@@ -253,14 +253,14 @@
         .lcd-gps-status {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: clamp(10px, 2.2vh, 15px);
+            gap: 4px;
+            font-size: clamp(9px, 2.2vh, 13px);
             font-weight: bold;
         }
 
         .satellite-icon {
-            width: clamp(16px, 3.8vh, 26px);
-            height: clamp(16px, 3.8vh, 26px);
+            width: clamp(14px, 3.2vh, 22px);
+            height: clamp(14px, 3.2vh, 22px);
             fill: var(--lcd-text);
         }
 
@@ -276,29 +276,28 @@
         /* 主車資展示區 */
         .lcd-fare-section {
             display: flex;
-            align-items: flex-end;
-            gap: 6px;
+            align-items: baseline; /* 改為基準線對齊，確保中文字與大數字底部對齊 */
+            gap: 4px;
         }
 
         .fare-chinese-label {
             font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-            font-size: clamp(14px, 3.8vh, 28px);
+            font-size: clamp(12px, 2.8vh, 18px);
             font-weight: bold;
-            margin-bottom: clamp(2px, 0.5vh, 8px);
         }
 
         .fare-digit {
-            font-size: clamp(40px, 11vh, 78px);
+            font-family: 'Share Tech Mono', monospace; /* 改用不會在 Safari 下裁切的等寬科技字型 */
+            font-size: clamp(45px, 12vh, 85px); /* 重新優化字級，在大螢幕與小螢幕都有極佳效果 */
             font-weight: bold;
-            line-height: 0.85;
-            letter-spacing: -2px;
+            line-height: 1.0; /* 恢復安全行高，防止 iOS Safari 裁切字體頂部 */
+            letter-spacing: 1px; /* 適度間距 */
         }
 
         .fare-unit {
             font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-            font-size: clamp(14px, 3.8vh, 28px);
+            font-size: clamp(12px, 2.8vh, 18px);
             font-weight: bold;
-            margin-bottom: clamp(2px, 0.5vh, 8px);
         }
 
         /* 下方實體按鈕區 */
@@ -484,7 +483,7 @@
 
                     <!-- LCD 第二排數據 -->
                     <div class="lcd-bottom-row">
-                        <!-- 當前時間 (15:34:00) -->
+                        <!-- 當前時間 -->
                         <div class="lcd-clock-container" id="clockDisplay">15:34:00</div>
                         
                         <!-- GPS 狀態 -->
@@ -804,6 +803,9 @@
             }
         }
 
+        // --- 控制按鈕實作 ---
+
+        // 1. 計程計時 (開始按鈕)
         function startMeter() {
             playBeep();
             if (isRunning) return;
@@ -838,6 +840,7 @@
             delayTimer = setInterval(checkDelay, 1000);
         }
 
+        // 2. 停 (暫停按鈕)
         function stopMeter() {
             playBeep();
             if (!isRunning) return;
@@ -864,6 +867,7 @@
             updateUI();
         }
 
+        // 3. 空 (歸零復原)
         function triggerEmpty() {
             playBeep(800, 0.2);
             if (isRunning) stopMeter();
@@ -887,6 +891,7 @@
             closeReceipt();
         }
 
+        // 4. 高速公路
         function toggleHwy() {
             playBeep();
             if (!isRunning) {
@@ -898,6 +903,7 @@
             ui.sysStatus.innerText = isHighway ? "高速公路模式 (不計延滯時間，累加模擬ETC)" : "一般市區道路模式";
         }
 
+        // 5. 列印乘車證明收據
         function printReceipt() {
             playBeep(2000, 0.4);
             
