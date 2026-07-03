@@ -381,6 +381,7 @@
             margin-bottom: clamp(4px, 1vh, 14px);
             opacity: 0.08; /* 未啟動時隱約可見(LCD特性) */
             transition: all 0.3s;
+            cursor: pointer;
         }
         
         .night-indicator.active {
@@ -699,6 +700,33 @@
     </div>
 
     <script>
+        // --- DOM 元素 (移至最頂端以確保在任何函式執行前完全初始化) ---
+        const ui = {
+            fare: document.getElementById('fareDisplay'),
+            dist: document.getElementById('distanceDisplay'),
+            speed: document.getElementById('accuracyDisplay'), // 用原來的欄位當作速度/GPS狀態展示
+            delay: document.getElementById('delayDisplay'),
+            clock: document.getElementById('clockDisplay'),
+            etc: document.getElementById('etcDisplay'),
+            zone: document.getElementById('zoneDisplay'),
+            sysStatus: document.getElementById('sysStatus'),
+            satIcon: document.getElementById('satIcon'),
+            nightDisplay: document.getElementById('nightDisplay'),
+            
+            // 指示燈
+            ledEmpty: document.getElementById('led-empty'),
+            ledStart: document.getElementById('led-start'),
+            ledStop: document.getElementById('led-stop'),
+            ledHwy: document.getElementById('led-hwy'),
+            
+            // 彈窗與收據
+            receipt: document.getElementById('receiptPaper'),
+            modal: document.getElementById('customModal'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalMsg: document.getElementById('modalMessage'),
+            modalActions: document.getElementById('modalActions')
+        };
+
         // --- 營業區官方最新費率資料庫 ---
         const REGION_CONFIGS = {
             "雙北市": {
@@ -721,8 +749,8 @@
                 distFare: 5,
                 delayInc: 80,      // 每 80 秒
                 delayFare: 5,
-                nightRule: "none", // 無夜間加成
-                nightFlat: 0,
+                nightRule: "flat", // 夜間加成起步價加20
+                nightFlat: 20,
                 nightRatio: 1.0
             },
             "台中市": {
@@ -780,6 +808,7 @@
         let currentSpeed = 0;  // km/h
 
         let isHighway = false;     // 高速公路模式
+        let manualNightState = null; // "on" = 強制夜間, "off" = 強制日間, null = 自動判定
 
         // 收據記錄用
         let startTimeStr = "--:--:--";
@@ -885,7 +914,7 @@
                 gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.45, audioCtx.currentTime + 0.02); // 快速起音
                 
-                // 動態模擬多次撕扯起伏 (嘶...嘶啦...的層次感)
+                // 動態模擬多次撕扯起伏
                 gainNode.gain.setValueAtTime(0.45, audioCtx.currentTime + 0.05);
                 gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime + 0.12);
                 gainNode.gain.setValueAtTime(0.35, audioCtx.currentTime + 0.18);
@@ -900,33 +929,6 @@
             } catch(e) { console.error("撕紙音效錯誤:", e); }
         }
 
-        // --- DOM 元素 ---
-        const ui = {
-            fare: document.getElementById('fareDisplay'),
-            dist: document.getElementById('distanceDisplay'),
-            speed: document.getElementById('accuracyDisplay'), // 用原來的欄位當作速度/GPS狀態展示
-            delay: document.getElementById('delayDisplay'),
-            clock: document.getElementById('clockDisplay'),
-            etc: document.getElementById('etcDisplay'),
-            zone: document.getElementById('zoneDisplay'),
-            sysStatus: document.getElementById('sysStatus'),
-            satIcon: document.getElementById('satIcon'),
-            nightDisplay: document.getElementById('nightDisplay'),
-            
-            // 指示燈
-            ledEmpty: document.getElementById('led-empty'),
-            ledStart: document.getElementById('led-start'),
-            ledStop: document.getElementById('led-stop'),
-            ledHwy: document.getElementById('led-hwy'),
-            
-            // 彈窗與收據
-            receipt: document.getElementById('receiptPaper'),
-            modal: document.getElementById('customModal'),
-            modalTitle: document.getElementById('modalTitle'),
-            modalMsg: document.getElementById('modalMessage'),
-            modalActions: document.getElementById('modalActions')
-        };
-
         // --- 手動切換營業區邏輯 ---
         function cycleRegion(e) {
             if (e) e.stopPropagation();
@@ -937,8 +939,29 @@
             currentRegionKey = regionsList[nextIndex];
             
             ui.zone.innerText = currentRegionKey;
-            ui.sysStatus.innerText = `營業區手動切換至：${currentRegionKey}`;
+            ui.sysStatus.innerText = `營業區手動切換：${currentRegionKey}`;
             
+            updateUI();
+        }
+
+        // --- 手動開關夜間加成（測試專用） ---
+        function toggleNightModeManual(e) {
+            if (e) e.stopPropagation();
+            playBeep(1400, 0.05);
+            
+            // 狀態機循環： 隨系統(null) -> 強制夜間(true) -> 強制日間(false)
+            if (manualNightState === null) {
+                manualNightState = "on";
+                ui.sysStatus.innerText = "強制點亮 [夜間加成] 費率";
+            } else if (Math.abs(manualNightState - 1) < 0.01 || manualNightState === true || manualNightState === "on") {
+                // 原本為真，手動強制設為假（日間）
+                manualNightState = "off";
+                ui.sysStatus.innerText = "強制關閉 [夜間加成]，套用日間費率";
+            } else {
+                manualNightState = null;
+                ui.sysStatus.innerText = "夜間加成恢復為 [系統自動判定]";
+            }
+
             updateUI();
         }
 
@@ -1001,18 +1024,20 @@
                 <div class="guide-box">
                     <div class="guide-step">
                         <strong>🍎 iPhone / iPad (Safari) 推薦：</strong><br>
-                        1. 點選 Safari 瀏覽器底部的<strong>「分享」按鈕</strong>（箭頭向上圖示）。<br>
-                        2. 往下滑選單，選擇<strong>「加入主畫面」</strong>。<br>
-                        3. 點選右上角「新增」。從主畫面上打開，即可擁有 100% 滿版無網址列的 PWA 體驗！
+                        1. 點選 Safari 瀏覽器底部的<strong>「分享」按鈕</strong>（主導覽列箭頭向上圖示）。<br>
+                        2. 往下滑選單，選擇<strong>「加入主畫面」</strong>並新增。<br>
+                        3. 回到手機桌面點擊圖示，即可擁有 100% 滿版無網址列 the HC-1 獨立 App 體驗！
                     </div>
                     <div class="guide-step">
                         <strong>🤖 Android 手機 (Chrome)：</strong><br>
-                        1. 點選 Chrome 網址列右上角的<strong>「三個點」設定選單</strong>。<br>
+                        1. 點選 Chrome 右上角<strong>「三個點」設定選單</strong>。<br>
                         2. 點選<strong>「安裝應用程式」</strong>或<strong>「加入主畫面」</strong>。<br>
-                        3. 確認新增後，在手機桌面點擊圖示即可全螢幕啟用！
+                        3. 新增後，在手機桌面點擊圖示即可全螢幕啟用！
                     </div>
-                    <div class="guide-step" style="background:#552222; text-align:center;">
-                        💡 <strong>計費祕笈：</strong>點擊螢幕上的<strong>「營業區」</strong>可以手動切換雙北、桃園、台中、台南、高雄最新官方費率喔！
+                    <div class="guide-step" style="background:#3b5c3b; text-align:center;">
+                        💡 <strong>夜間與費率控制秘訣：</strong><br>
+                        • 點擊 LCD 面板上的<strong>「營業區」</strong>，即可手動輪播切換 5 大都市新制費率。<br>
+                        • 點擊 LCD 面板上的<strong>「夜間」</strong>，可手動強制切換 日間/夜間費率 進行測試！
                     </div>
                 </div>
             `;
@@ -1031,7 +1056,7 @@
             return R * c;
         }
 
-        // --- 營業區動態偵測 (依據經緯度估算台灣縣市) ---
+        // --- 營業區自動 GPS 定位偵測 ---
         function detectZone(lat, lon) {
             if (lat >= 24.85 && lat <= 25.3 && lon >= 121.3 && lon <= 122.0) {
                 return "雙北市";
@@ -1044,17 +1069,17 @@
             } else if (lat >= 22.4 && lat <= 23.1 && lon >= 120.1 && lon <= 120.8) {
                 return "高雄市";
             }
-            return null; // 若在其他地方，不覆蓋用戶的手動選擇
+            return null; // 若在判定區外，保留使用者目前的選擇
         }
 
-        // --- UI 畫面刷新 (費率核心算法) ---
+        // --- UI 畫面刷新 (新版費率核心計算) ---
         function updateUI() {
             const config = REGION_CONFIGS[currentRegionKey];
             
-            // 1. 基本車資
+            // 1. 起跳車資
             let newFare = config.baseFare;
             
-            // 2. 距離計費
+            // 2. 續程距離計費 (每過一個間距加5元)
             if (totalDistance > config.baseDistance) {
                 const extraDist = totalDistance - config.baseDistance;
                 const distJumps = Math.floor(extraDist / config.distInc);
@@ -1065,44 +1090,49 @@
             const delayJumps = Math.floor(delaySeconds / config.delayInc);
             newFare += delayJumps * config.delayFare;
 
-            // 4. 夜間加成判定 (23:00 至 06:00)
-            let isNightTime = false;
-            const now = new Date();
-            const hour = now.getHours();
-            if (hour >= 23 || hour < 6) {
-                isNightTime = true;
+            // 4. 夜間加成判定
+            let isNightActive = false;
+            if (manualNightState === "on") {
+                isNightActive = true;
+            } else if (manualNightState === "off") {
+                isNightActive = false;
+            } else {
+                // 自動模式：判定當前系統時間 (23:00 ~ 06:00)
+                const now = new Date();
+                const hour = now.getHours();
+                isNightActive = (hour >= 23 || hour < 6);
             }
 
-            // 更新 LCD 「夜間」指示器狀態
-            if (isNightTime && config.nightRule !== "none") {
+            // 更新 LCD 面板夜間指示燈狀態
+            if (isNightActive && config.nightRule !== "none") {
                 ui.nightDisplay.classList.add('active');
             } else {
                 ui.nightDisplay.classList.remove('active');
             }
 
-            // 5. 套用夜間加成演算法
-            if (isNightTime) {
+            // 5. 套用夜間加成公式
+            if (isNightActive) {
                 if (config.nightRule === "flat") {
-                    // 雙北、台中：每趟固定加收 20 元
+                    // 雙北、桃園、台中：起跳或總趟加固定金額 (通常起跑直接反映或結算加20元)
                     newFare += config.nightFlat;
                 } else if (config.nightRule === "ratio") {
-                    // 台南、高雄：總車資加收 2 成 (乘以 1.2)，並精確四捨五入到 5 元整數倍 (跳表特性)
+                    // 台南、高雄：總車資乘以 1.2 倍，並精確四捨五入到 5 元整數倍 (跳表物理特性)
                     const ratioFare = newFare * config.nightRatio;
                     newFare = Math.round(ratioFare / 5) * 5;
                 }
             }
 
-            // 加上模擬 ETC 通行費
+            // 加上高速公路 ETC 累計通行費
             newFare += etcToll;
             currentFare = newFare;
 
-            // 6. 觸發跳表「嗶嗶！」音效
+            // 6. 跳表加價時發出經典「嗶嗶！」雙擊電子音
             if (currentFare > previousFare) {
                 playCoinSound();
                 previousFare = currentFare;
             }
 
-            // 7. 渲染資料到 LCD 螢幕
+            // 7. 更新元件數據
             ui.fare.innerText = currentFare;
             ui.etc.innerText = etcToll;
             
@@ -1114,7 +1144,9 @@
             ui.delay.innerText = `${mins}:${secs}`;
         }
 
-        // --- GPS 位置解析 ---
+        // --- GPS 位置推送解析 ---
+        const DELAY_SPEED_LIMIT = 5.0; // 門檻速限: 5 km/h
+
         function handlePosition(position) {
             if (!isRunning) return;
 
@@ -1123,17 +1155,17 @@
             let calcSpeed = speed !== null ? (speed * 3.6) : 0;
 
             if (accuracy > 50) {
-                ui.sysStatus.innerText = `訊號弱 (${Math.round(accuracy)}m)`;
-                ui.speed.innerText = "訊號弱";
+                ui.sysStatus.innerText = `GPS 訊號不良 (${Math.round(accuracy)}m)`;
+                ui.speed.innerText = "微弱";
                 ui.satIcon.classList.add('searching');
                 return;
             }
 
             ui.satIcon.classList.remove('searching');
             ui.speed.innerText = `${Math.round(calcSpeed)} km/h`;
-            ui.sysStatus.innerText = `GPS 連線正常 (精確度: ${Math.round(accuracy)}m)`;
+            ui.sysStatus.innerText = `GPS 連線正常 (訊號誤差: ${Math.round(accuracy)}m)`;
 
-            // 若自動偵測到縣市且沒手動亂點，自動切換
+            // 自動根據位置更換計費區
             const detected = detectZone(latitude, longitude);
             if (detected && detected !== currentRegionKey) {
                 currentRegionKey = detected;
@@ -1144,12 +1176,13 @@
                 const distDiff = calculateDistance(lastPos.lat, lastPos.lon, latitude, longitude);
                 const timeDiff = (timestamp - lastPos.time) / 1000;
 
-                // 如果移动距離小於等於 2 公尺，視為原地停等紅燈 (避免 GPS 原地抖動導致判定有速度)
-                if (distDiff <= 2) {
+                // 如果移動極其微小 (小於等於 2.0 米)，視為「完全停等」 (過濾 GPS 抖動干擾)
+                if (distDiff <= 2.0) {
                     calcSpeed = 0;
                 } else if (distDiff < 300) {
                     totalDistance += distDiff;
                     
+                    // 高速公路模式：每走 1 公里，模擬累積 15 元通行費 (ETC)
                     if (isHighway) {
                         const preKm = Math.floor((totalDistance - distDiff) / 1000);
                         const curKm = Math.floor(totalDistance / 1000);
@@ -1173,9 +1206,9 @@
 
         function handleGPSError(error) {
             let msg = "GPS 錯誤";
-            if (error.code === 1) msg = "請允許 Safari 定位權限";
-            if (error.code === 2) msg = "無法取得 GPS 定位";
-            if (error.code === 3) msg = "GPS 連線逾時";
+            if (error.code === 1) msg = "請先在瀏覽器設定中允許此網頁的定位權限。";
+            if (error.code === 2) msg = "無法獲取穩定的 GPS 訊號。";
+            if (error.code === 3) msg = "GPS 定位超時。";
             
             ui.sysStatus.innerText = "錯誤: " + msg;
             ui.speed.innerText = "ERR";
@@ -1183,26 +1216,30 @@
             showModal('error', msg);
         }
 
+        // --- 延滯計時的核心守衛機制 (每秒執行) ---
         function checkDelay() {
             if (!isRunning) return;
             if (isHighway) return;
 
-            // 雙重安全心跳機制：若超過 3.5 秒 GPS 完全沒有任何位置資訊推送，代表車子已完全靜止
             const now = Date.now();
-            if (lastPos && (now - lastPos.time > 3500)) {
+            
+            // 超時心跳修正：如果手機已經停下來， watchPosition 由於位置不再改變會停止呼叫。
+            // 如果上一次 GPS 更新時間距離現在已超過 2.8 秒，強制將時速降為 0，開啟延滯計費！
+            if (lastPos && (now - lastPos.time > 2800)) {
                 currentSpeed = 0;
                 ui.speed.innerText = "0 km/h";
             }
 
+            // 當前時速低於 5 km/h 累計延滯計時
             if (currentSpeed < DELAY_SPEED_LIMIT) {
                 delaySeconds++;
                 updateUI();
             }
         }
 
-        // --- 控制按鈕實作 ---
+        // --- 按鈕事件控制 ---
 
-        // 1. 計程計時 (開始按鈕)
+        // 1. 計程計時
         function startMeter() {
             playBeep();
             if (isRunning) return;
@@ -1221,7 +1258,7 @@
             ui.ledStop.classList.remove('active');
             ui.ledEmpty.classList.remove('active');
             
-            ui.sysStatus.innerText = "正在取得 GPS 定位...";
+            ui.sysStatus.innerText = "開始計程計時，正在等待 GPS 定位...";
             ui.speed.innerText = "SEARCH";
 
             watchId = navigator.geolocation.watchPosition(
@@ -1234,10 +1271,11 @@
                 }
             );
 
+            // 每秒執行延滯時速安全檢查
             delayTimer = setInterval(checkDelay, 1000);
         }
 
-        // 2. 停 (暫停按鈕)
+        // 2. 停
         function stopMeter() {
             playBeep();
             if (!isRunning) return;
@@ -1248,7 +1286,7 @@
             isRunning = false;
             ui.ledStart.classList.remove('active');
             ui.ledStop.classList.add('active');
-            ui.sysStatus.innerText = "暫停計費中";
+            ui.sysStatus.innerText = "計費已暫停。";
             ui.speed.innerText = "PAUSE";
 
             if (watchId !== null) {
@@ -1264,7 +1302,7 @@
             updateUI();
         }
 
-        // 3. 空 (歸零復原)
+        // 3. 空 (清空重置)
         function triggerEmpty() {
             playBeep(800, 0.2);
             if (isRunning) stopMeter();
@@ -1285,24 +1323,24 @@
             ui.ledStop.classList.remove('active');
 
             updateUI();
-            ui.sysStatus.innerText = "已清空歸零。空車狀態。";
+            ui.sysStatus.innerText = "數據已清空。空車載客準備中。";
             ui.speed.innerText = "READY";
             closeReceipt();
         }
 
-        // 4. 高速公路
+        // 4. 高速公路切換
         function toggleHwy() {
             playBeep();
             if (!isRunning) {
-                showModal('error', "請先按下「計程計時」開始計費，才能啟用高速公路模式。");
+                showModal('error', "請先按下「計程計時」開始計費後，才能啟用高速公路模式。");
                 return;
             }
             isHighway = !isHighway;
             ui.ledHwy.classList.toggle('active', isHighway);
-            ui.sysStatus.innerText = isHighway ? "高速公路模式 (不計延滯時間，累加模擬ETC)" : "一般市區道路模式";
+            ui.sysStatus.innerText = isHighway ? "高速公路模式 (暫停累計紅燈秒數，啟用模擬ETC通行費)" : "一般市區道路模式";
         }
 
-        // 5. 列印乘車證明收據
+        // 5. 列印乘車收據
         function printReceipt() {
             playBeep(2000, 0.4);
             
@@ -1321,6 +1359,9 @@
             document.getElementById('recStartTime').innerText = startTimeStr;
             document.getElementById('recEndTime').innerText = endTimeStr;
             document.getElementById('recDist').innerText = `${(totalDistance / 1000).toFixed(2)} km`;
+            
+            const config = REGION_CONFIGS[currentRegionKey];
+            document.getElementById('recBase').innerText = `NT$ ${config.baseFare}`;
             
             const mins = Math.floor(delaySeconds / 60);
             const secs = delaySeconds % 60;
